@@ -1,50 +1,42 @@
 #include "kernel/types.h"
 #include "user.h"
+#define MAXN 1024
+
 int main(int argc, char *argv[])
 {
-  char buf[512];
-  char* full_argv[4];
-  int i;
-  int len;
+  char buf[MAXN] = {"\0"};
+  char* full_argv[MAXN];
   if(argc < 2){
-    fprintf(2, "usage: xargs your_command\n");
+    printf("too little args!");
     exit(1);
   }
-  // we need an extra arg and a terminating zero
-  // and we don't need the first argument xargs
-  // so in total, we need one extra space than the origin argc
-  if (argc + 1 > 4) {
-      fprintf(2, "too many args\n");
-      exit(1);
-  }
-  // copy the original args
-  // skip the first argument xargs
-  for (i = 1; i < argc; i++) {
+  // 略去 xargs ，用来保存命令行参数
+  for (int i = 1; i < argc; ++i) {
       full_argv[i-1] = argv[i];
   }
-  // full_argv[argc-1] is the extra arg to be filled
-  // full_argv[argc] is the terminating zero
-  full_argv[argc] = 0;
-  while (1) {
-      i = 0;
-      // read a line
-      while (1) {
-        len = read(0,&buf[i],1);
-        if (len == 0 || buf[i] == '\n') break;
-        i++;
-      }
-      if (i == 0) break;
-      // terminating 0
-      buf[i] = 0;
-      full_argv[argc-1] = buf;
-      if (fork() == 0) {
-        // fork a child process to do the job
-        exec(full_argv[0],full_argv);
-        exit(0);
-      } else {
-        // wait for the child process to complete
-        wait(0);
-      }
-  }
+  
+  int n;
+	// 也就是从管道循环读取数据
+  while((n = read(0, buf, MAXN)) > 0 ) {
+        // 临时缓冲区存放追加的参数
+		char temp[MAXN] = {"\0"};
+      // xargs 命令的参数后面再追加参数
+    full_argv[argc-1] = temp;
+    // 内循环获取追加的参数并创建子进程执行命令
+    for(int i = 0; i < strlen(buf); ++i) {
+        // 读取单个输入行，当遇到换行符时，创建子线程
+        if(buf[i] == '\n') {
+            // 创建子线程执行命令
+            if (fork() == 0) {
+                exec(argv[1], full_argv);
+            }
+            // 等待子线程执行完毕
+            wait(0);
+        } else {
+            // 否则，读取管道的输出作为输入
+            temp[i] = buf[i];
+        }
+        }
+    }
   exit(0);
 }
