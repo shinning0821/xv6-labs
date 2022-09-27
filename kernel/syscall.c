@@ -172,6 +172,6 @@ syscall(void)
     p->trapframe->a0 = -1;
   }
   if(p->mask & (num<<num)){
-	 	printf("%d: sys_%s -> %d\n", p->pid, sysname[num],p->trapframe->a0);
+	 	printf("%d: sys_%s(%d) -> %d\n", p->pid, sysname[num],p->trapframe->a0,p->trapframe->a0);
 	}
 }
