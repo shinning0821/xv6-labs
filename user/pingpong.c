@@ -29,10 +29,10 @@ int main(int argc,char* argv[]){
 
         char buff[10];
         read(p[0], buff, sizeof(buff));
+        close(p[0]);
         if(strcmp(buff,"pong")==0){
             printf("%d: received pong\n",getpid());
         }
-        close(p[0]);
         exit(0);
     }
     else if(pid == 0){

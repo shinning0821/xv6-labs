@@ -40,12 +40,12 @@ void find(char *path, char *name)
 	    case T_FILE:  //如果是文件类型
 	 	    if(!strcmp(fmtname(path), name))  //找到文件 
 	     	    printf("%s\n", path); 
-	  	        break;
+	  	    break;
 	    case T_DIR:  //如果是目录类型且超出缓冲区
 	 	    if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
 	        	printf("find: path too long\n");
-	            break;
-	   	}
+	        	break;
+	   		}
 	   	strcpy(buf, path); //将输入的目录字符串复制到buf中
 	   	p = buf+strlen(buf);
 	   	*p++ = '/';  //将`/`拼接在后面
