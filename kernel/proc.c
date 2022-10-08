@@ -277,6 +277,9 @@ fork(void)
 
   np->parent = p;
 
+  //copy trace mask
+  np->mask = p->mask;
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -692,4 +695,38 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+ 
+// get number of proc
+uint64
+nproc(void)
+{
+  uint64 counter = 0;
+  struct proc *p;
+  // 遍历进程控制块，即OS课程中的PCB
+  for(p = proc; p < &proc[NPROC]; p++) { 
+    acquire(&p->lock);
+    if(p->state == UNUSED) {
+      ++counter;
+    }
+    release(&p->lock);
+  }
+  return counter;
+}
+
+
+uint64
+freefd(void)
+{
+  uint64 num = 0;
+  int fd;
+  struct proc *p = myproc();
+
+  for(fd = 0; fd < NOFILE; fd++){
+    if(p->ofile[fd] == 0){
+      ++num;
+    }
+  }
+  return num;
 }
