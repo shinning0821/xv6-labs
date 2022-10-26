@@ -18,15 +18,21 @@ struct run {
   struct run *next;
 };
 
-struct {
+struct kmem{
   struct spinlock lock;
   struct run *freelist;
 } kmem;
 
+struct kmem kmems[NCPU];
+
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  // initlock(&kmem.lock, "kmem");
+  // 修改之后，对于每个CPU都单独分配一个链表
+  for (int i = 0; i < NCPU; i++){
+    initlock(&kmems[i].lock, "kmem");   //其实就是分别初始化一个锁
+  }  
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -43,6 +49,13 @@ freerange(void *pa_start, void *pa_end)
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
+int get_cpuid(){
+  push_off();
+  int current_id = cpuid();
+  pop_off();
+  return current_id;
+}
+
 void
 kfree(void *pa)
 {
@@ -56,10 +69,11 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  int current_id = get_cpuid();
+  acquire(&kmems[current_id].lock);
+  r->next = kmems[current_id].freelist;
+  kmems[current_id].freelist = r;
+  release(&kmems[current_id].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -69,12 +83,34 @@ void *
 kalloc(void)
 {
   struct run *r;
+  int if_steal = 0;
+  int current_id = get_cpuid();
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
+  acquire(&kmems[current_id].lock);
+  r = kmems[current_id].freelist;
   if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+    kmems[current_id].freelist = r->next;
+
+  else{
+    for (int id=0;id<NCPU;id++){
+      if(id == current_id) continue;
+        
+      acquire(&kmems[id].lock);
+      r = kmems[id].freelist;
+      if(r){
+        kmems[id].freelist = r->next;
+        release(&kmems[id].lock);
+        if_steal = 1;
+        break;
+      }
+      release(&kmems[id].lock);
+    }
+    if(if_steal == 0){
+      release(&kmems[current_id].lock);
+      return 0;
+    }
+  }
+  release(&kmems[current_id].lock);
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
