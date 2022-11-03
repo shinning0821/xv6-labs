@@ -112,7 +112,7 @@ bget(uint dev, uint blockno)
     return b;
   }
   release(&bcache.lock);
-  release(&bcache.bucketslock[id]);
+  // release(&bcache.bucketslock[id]);
 
   // select the last-recently used block int the bucket
   //based on the timestamp - lab8-2
