@@ -1,9 +1,9 @@
 // Buffer cache.
 //
 // The buffer cache is a linked list of buf structures holding
-// cached copies of disk block contents.  Caching disk blocks
+// cached copies of disk block contents.  Caching disk bbucketslock
 // in memory reduces the number of disk reads and also provides
-// a synchronization point for disk blocks used by multiple processes.
+// a synchronization point for disk bbucketslock used by multiple processes.
 //
 // Interface:
 // * To get a buffer for a particular disk block, call bread.
@@ -81,8 +81,9 @@ bget(uint dev, uint blockno)
   struct buf *b;
   // lab8-2
   int id = hash(blockno);
-  struct buf *pre, *minb, *minpre;
+  struct buf *pre, *minb = 0, *minpre;
   uint mintimestamp;
+  // int i;
   
   // loop up the buf in the buckets[id]
   acquire(&bcache.bucketslock[id]);  // lab8-2
@@ -112,7 +113,7 @@ bget(uint dev, uint blockno)
     return b;
   }
   release(&bcache.lock);
-  // release(&bcache.bucketslock[id]);
+  release(&bcache.bucketslock[id]);
 
   // select the last-recently used block int the bucket
   //based on the timestamp - lab8-2
@@ -174,6 +175,7 @@ bget(uint dev, uint blockno)
 //  }
   panic("bget: no buffers");
 }
+
 
 
 // Return a locked buf with the contents of the indicated block.
@@ -245,5 +247,4 @@ bunpin(struct buf *b) {
   b->refcnt--;
   release(&bcache.bucketslock[id]);
 }
-
 
