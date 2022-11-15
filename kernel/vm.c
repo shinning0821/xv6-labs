@@ -450,3 +450,28 @@ test_pagetable()
   uint64 gsatp = MAKE_SATP(kernel_pagetable);
   return satp != gsatp;
 }
+
+
+void 
+printwalk(pagetable_t pagetable, uint level) {
+  char* prefix;
+  if (level == 2) prefix = "||";
+  else if (level == 1) prefix = "|| ||";
+  else prefix = "|| || ||";
+  for(int i = 0; i < 512; i++){ // 每个页表有512项
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V){ // 该页表项有效
+      uint64 pa = PTE2PA(pte); // 将虚拟地址转换为物理地址
+      printf("%s%d: pte %p pa %p\n", prefix, i, pte, pa);
+      if((pte & (PTE_R|PTE_W|PTE_X)) == 0){ // 有下一级页表
+         printwalk((pagetable_t)pa, level - 1);
+      }
+    }
+  }
+}
+ 
+void
+vmprint(pagetable_t pagetable) {
+  printf("page table %p\n", pagetable);
+  printwalk(pagetable, 2);
+}
