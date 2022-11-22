@@ -34,12 +34,13 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
+      char *pa = kalloc();                             // 为内核栈分配页 
       if(pa == 0)
         panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      uint64 va = KSTACK((int) (p - proc));            // 内核栈的虚拟地址
+      kvmmap(va, (uint64)pa,PGSIZE, PTE_R | PTE_W);    // 保留内核栈在全局内核页表kernel pagrtable的映射    
+      p->kstack = va;                                  
+      p->kstack_pa = (uint64)pa;                       // 内核栈的物理地址拷贝的PCB新成员kstack_pa中
   }
   kvminithart();
 }
@@ -121,6 +122,17 @@ found:
     return 0;
   }
 
+  // 在allocproc()函数中调用ukvminit，用于创建进程的单独内核页表
+  p->k_pagetable = ukvminit();
+  if(p->k_pagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // 将内核栈映射到进程的内核页表中
+  prockvmmap(p->k_pagetable, p->kstack, p->kstack_pa, PGSIZE, PTE_R | PTE_W);
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -128,6 +140,25 @@ found:
   p->context.sp = p->kstack + PGSIZE;
 
   return p;
+}
+
+// 参照freewalk函数，实现对页表的释放,但不释放叶子页表指向的物理页帧
+void
+freekpagetable(pagetable_t pagetable)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){                          // 遍历页表中的所有页
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V)){                               // 页有效
+      pagetable[i] = 0;                         // 清空页
+      if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){   // 不是叶子页表
+        // this PTE points to a lower-level page table.
+        uint64 child = PTE2PA(pte);
+        freekpagetable((pagetable_t)child);        // 递归清空下一级页表
+      }
+  }
+  }
+    kfree((void*)pagetable);           // 释放页表对应的物理内存页
 }
 
 // free a proc structure and the data hanging from it,
@@ -142,6 +173,12 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  
+  // 释放进程的内核页表
+  if(p->k_pagetable)
+    freekpagetable(p->k_pagetable);
+  p->k_pagetable = 0;
+
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -150,6 +187,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  
 }
 
 // Create a user page table for a given process,
@@ -220,7 +258,8 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
-
+  // 将用户页表复制到内核页表
+  kvmcopy(p->pagetable, p->k_pagetable, 0, p->sz);
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -242,12 +281,27 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+  // grow
   if(n > 0){
+    // 要保证用户空间的大小小于PLIC
+    if((sz+n)>PLIC){
+      return -1;
+    }
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
-  } else if(n < 0){
+    // 将新增的页表空间复制到内核页表
+    if(kvmcopy(p->pagetable, p->k_pagetable, p->sz, sz)<0){
+      return -1;
+    }
+  }
+  // shrink 
+  else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    // 解除shrink页表部分的映射
+    if(PGROUNDUP(sz)<PGROUNDUP(p->sz)){
+      uvmunmap(p->k_pagetable, PGROUNDUP(sz), (PGROUNDUP(p->sz)-PGROUNDUP(sz))/PGSIZE, 0);
+    }
   }
   p->sz = sz;
   return 0;
@@ -273,7 +327,15 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
   np->sz = p->sz;
+
+  // 将进程的用户页表复制到内核页表
+  if(kvmcopy(np->pagetable, np->k_pagetable, 0, np->sz)<0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
 
   np->parent = p;
 
@@ -473,12 +535,20 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+        // 参考kvminithart的实现方式，实现页表的切换
+        w_satp(MAKE_SATP(p->k_pagetable));          // 载入页表
+        sfence_vma();                               // 释放TLB
+
+        // 切换进程
         swtch(&c->context, &p->context);
+
+        // 无进程运行时的适配，调用kvminithart()切换回全局内核页表
+        kvminithart();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0; // cpu dosen't run any process now
-
         found = 1;
       }
       release(&p->lock);
