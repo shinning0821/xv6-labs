@@ -122,8 +122,8 @@ found:
     return 0;
   }
 
-  // 在allocproc()函数中调用ukvminit，用于创建进程的单独内核页表
-  p->k_pagetable = ukvminit();
+  // 在allocproc()函数中调用proc_kvminit，用于创建进程的单独内核页表
+  p->k_pagetable = proc_kvminit();
   if(p->k_pagetable == 0){
     freeproc(p);
     release(&p->lock);
@@ -144,21 +144,21 @@ found:
 
 // 参照freewalk函数，实现对页表的释放,但不释放叶子页表指向的物理页帧
 void
-freekpagetable(pagetable_t pagetable)
+free_kpagetable(pagetable_t pagetable)
 {
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){                          // 遍历页表中的所有页
     pte_t pte = pagetable[i];
     if((pte & PTE_V)){                               // 页有效
-      pagetable[i] = 0;                         // 清空页
-      if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){   // 不是叶子页表
+      pagetable[i] = 0;                             // 清空页
+      if((pte & (PTE_R|PTE_W|PTE_X)) == 0){         // 有下一届页表
         // this PTE points to a lower-level page table.
         uint64 child = PTE2PA(pte);
-        freekpagetable((pagetable_t)child);        // 递归清空下一级页表
+        free_kpagetable((pagetable_t)child);        // 递归清空下一级页表
       }
   }
   }
-    kfree((void*)pagetable);           // 释放页表对应的物理内存页
+  kfree((void*)pagetable);           // 释放页表对应的物理内存页
 }
 
 // free a proc structure and the data hanging from it,
@@ -176,7 +176,7 @@ freeproc(struct proc *p)
   
   // 释放进程的内核页表
   if(p->k_pagetable)
-    freekpagetable(p->k_pagetable);
+    free_kpagetable(p->k_pagetable);
   p->k_pagetable = 0;
 
   p->sz = 0;

@@ -52,7 +52,7 @@ kvminit()
  * 为任务三的顺利完成，删去Clint的映射
  */
 pagetable_t
-ukvminit()
+proc_kvminit()
 {
   pagetable_t k_pagetable = (pagetable_t)kalloc();
   memset(k_pagetable,0,PGSIZE);
@@ -153,7 +153,7 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 
 // kvmmap实现了向kernel pagetable的映射
 // 仿照kvmmap实现该函数，实现将页表映射到进程各自的内核页表
-// 供ukvminit进程内核页表初始化函数使用
+// 供proc_kvminit进程内核页表初始化函数使用
 void
 prockvmmap(pagetable_t k_pagetable, uint64 va, uint64 pa, uint64 sz, int perm)
 {
@@ -382,7 +382,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 // 模仿uvmcopy()函数，其实现原理为新分配页面，将待复制的内容写进页面，再将该页面投影到新页表中
 // 而kvmcopy()函数与此不同，不需要新分配页面，只需将用户页表的页面映射到内核页表即可
 int
-kvmcopy(pagetable_t u_pagetable, pagetable_t k_pagetable, uint64 begin, uint64 end)       // begin表示页表开始复制的位置，end表示复制结束的位置
+kvmcopy(pagetable_t pagetable, pagetable_t k_pagetable, uint64 begin, uint64 end)       // begin表示页表开始复制的位置，end表示复制结束的位置
 {
   pte_t *pte;
   uint64 pa, i;
@@ -390,7 +390,7 @@ kvmcopy(pagetable_t u_pagetable, pagetable_t k_pagetable, uint64 begin, uint64 e
   uint64 begin_page = PGROUNDUP(begin);                       // 对begin向上取整
 
   for(i = begin_page; i < end; i += PGSIZE){
-    if((pte = walk(u_pagetable, i, 0)) == 0)
+    if((pte = walk(pagetable, i, 0)) == 0)
       panic("kvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("kvmcopy: page not present");
@@ -479,13 +479,13 @@ infowalk(pagetable_t pagetable, uint level) {
   for(int i = 0; i < 512; i++){ // 每个页表有512项
     pte_t pte = pagetable[i];
     if(pte & PTE_V){ // 该页表项有效
-      uint64 pa = PTE2PA(pte); // 将虚拟地址转换为物理地址
+      uint64 child = PTE2PA(pte); // 将虚拟地址转换为物理地址
       for(int j=level;j<=2;j++){
         printf("|| ");
       }
-      printf("%d: pte %p pa %p\n",i, pte, pa);
+      printf("%d: pte %p pa %p\n",i, pte, child);
       if((pte & (PTE_R|PTE_W|PTE_X)) == 0){ // 有下一级页表
-         infowalk((pagetable_t)pa, level - 1);
+         infowalk((pagetable_t)child, level - 1);
       }
     }
   }
