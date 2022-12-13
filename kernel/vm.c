@@ -57,23 +57,23 @@ proc_kvminit()
   pagetable_t k_pagetable = (pagetable_t)kalloc();
   memset(k_pagetable,0,PGSIZE);
   // uart registers
-  prockvmmap(k_pagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  proc_kvmmap(k_pagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
 
   // virtio mmio disk interface
-  prockvmmap(k_pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  proc_kvmmap(k_pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
 
   // PLIC
-  prockvmmap(k_pagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+  proc_kvmmap(k_pagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
 
   // map kernel text executable and read-only.
-  prockvmmap(k_pagetable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  proc_kvmmap(k_pagetable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
 
   // map kernel data and the physical RAM we'll make use of.
-  prockvmmap(k_pagetable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  proc_kvmmap(k_pagetable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
 
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
-  prockvmmap(k_pagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  proc_kvmmap(k_pagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
   return k_pagetable;
 }
 
@@ -155,10 +155,10 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 // 仿照kvmmap实现该函数，实现将页表映射到进程各自的内核页表
 // 供proc_kvminit进程内核页表初始化函数使用
 void
-prockvmmap(pagetable_t k_pagetable, uint64 va, uint64 pa, uint64 sz, int perm)
+proc_kvmmap(pagetable_t k_pagetable, uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(k_pagetable, va, sz, pa, perm) != 0)
-    panic("prockvmmap");
+    panic("proc_kvmmap");
 }
 
 

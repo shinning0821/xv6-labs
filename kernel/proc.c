@@ -131,7 +131,7 @@ found:
   }
 
   // 将内核栈映射到进程的内核页表中
-  prockvmmap(p->k_pagetable, p->kstack, p->kstack_pa, PGSIZE, PTE_R | PTE_W);
+  proc_kvmmap(p->k_pagetable, p->kstack, p->kstack_pa, PGSIZE, PTE_R | PTE_W);
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
