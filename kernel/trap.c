@@ -65,7 +65,32 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } else if(r_scause() == 13 || r_scause() == 15){
+    // 新增相应的错误处理
+    uint64 va = r_stval();
+    if(p->sz <= va){//地址高于sbrk申请的地址
+        p->killed = 1;
+    } else if(va < p->trapframe->sp){//地址低于栈顶地址 无效页
+        p->killed = 1;
+    } 
+    else{
+      char *pa = kalloc();
+      if(pa != 0) {    // 分配物理页
+        va = PGROUNDDOWN(r_stval());   // 引发page fault的虚拟地址向下取整
+        memset(pa, 0, PGSIZE);
+        // 进行页表映射
+        if(mappages(p->pagetable, va, PGSIZE, (uint64)pa, PTE_W|PTE_R|PTE_U) != 0) {
+            // 页表映射失败
+            kfree(pa);
+            printf("usertrap(): mappages() failed\n");
+            p->killed = 1;
+        }
+      } else {    // 分配物理页失败
+        printf("usertrap(): kalloc() failed\n");
+        p->killed = 1;
+      }
+    }
+  }else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
