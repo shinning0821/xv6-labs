@@ -65,7 +65,7 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if(r_scause() == 15) { // COW - lab6
+  } else if(r_scause() == 13 || r_scause() == 15) { // COW - lab6
     if (walkcowaddr(p->pagetable, r_stval()) == 0) {
       goto bad;
     }
