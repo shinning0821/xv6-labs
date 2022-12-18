@@ -403,7 +403,8 @@ bmap(struct inode *ip, uint bn)
 
   // doubly-indirect block - lab9-1
   bn -= NINDIRECT;
-  if(bn < NDOUBLYINDIRECT) {
+  if(bn < NININDIRECT) {
+    int block_index = bn / NINDIRECT;
     // get the address of doubly-indirect block
     if((addr = ip->addrs[NDIRECT + 1]) == 0) {
       ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);
@@ -411,8 +412,8 @@ bmap(struct inode *ip, uint bn)
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
     // get the address of singly-indirect block
-    if((addr = a[bn / NINDIRECT]) == 0) {
-      a[bn / NINDIRECT] = addr = balloc(ip->dev);
+    if((addr = a[block_index]) == 0) {
+      a[block_index] = addr = balloc(ip->dev);
       log_write(bp);
     }
     brelse(bp);
