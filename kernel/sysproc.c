@@ -50,9 +50,9 @@ sys_sbrk(void)
   p = myproc();
   addr = p->sz;
   // lab5-1
-  if(n >= 0 && addr + n >= addr){
+  if(n >= 0){
     p->sz += n;    // increase size but not allocate memory
-  } else if(n < 0 && addr + n >= PGROUNDUP(p->trapframe->sp)){
+  } else if(n < 0){
     // handle negative n and addr must be above user stack - lab5-3
     p->sz = uvmdealloc(p->pagetable, addr, addr + n);
   } else {
